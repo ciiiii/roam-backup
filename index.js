@@ -5,14 +5,10 @@ const config = {
 };
 
 const AWS = require("aws-sdk");
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_ACCESS_KEY_SECRET
-});
-
 const fs = require("fs");
 const glob = require("glob");
 const puppeteer = require("puppeteer");
+const {google} = require('googleapis');
 
 const generateExport = async () => {
   const browser = await puppeteer.launch();
@@ -95,8 +91,11 @@ const generateExport = async () => {
 
 const uploadToS3 = async filename => {
   try {
+    const s3 = new AWS.S3({
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_ACCESS_KEY_SECRET
+    });
     const fileContent = fs.readFileSync(filename);
-
     const params = {
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: `${config.backupFolder}/${filename}`,
@@ -111,6 +110,34 @@ const uploadToS3 = async filename => {
   }
 };
 
+const uploadToGDrive = async (fileName) => {
+  try {
+    const jwtClient = new google.auth.JWT({
+      email: process.env.GDRIVE_EMAIL,
+      key: process.env.GDRIVE_KEY,
+      scopes: ["https://www.googleapis.com/auth/drive.file"],
+    });
+    await jwtClient.authorizeAsync();
+  
+    const drive = google.drive({version: 'v3'});
+    const res = await drive.files.create(
+      {
+        auth: jwtClient,
+        requestBody: {
+          name: fileName,
+          parents: [process.env.GDRIVE_FOLDER]
+        },
+        media: {
+          body: fs.createReadStream(fileName),
+        },
+      });
+    console.log(res.data);
+  } catch(err) {
+    console.error("Something went wrong while uploading to Google Drive");
+    console.error(err);
+  }
+}
+
 const main = async function() {
   await generateExport();
   const files = glob.sync("*.zip");
@@ -118,8 +145,20 @@ const main = async function() {
   if (!filename) {
     throw new Error("Couldn't find a file to upload, aborting");
   }
-  console.log(`Uploading ${filename} to S3`);
-  await uploadToS3(filename);
+  switch (process.env.DRIVE) {
+    case "S3":
+      console.log(`Uploading ${filename} to S3`);
+      await uploadToS3(filename);
+      break;
+    case "GDRIVE":
+      console.log(`Uploading ${filename} to Google Drive`);
+      await uploadToGDrive(filename);
+      break;
+    default:
+      console.log(`Uploading ${filename} to S3`);
+      await uploadToS3(filename);
+      break;
+  }
 };
 
 main();
