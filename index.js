@@ -35,12 +35,13 @@ const generateExport = async () => {
 
     console.log("Successfully logged in");
 
-    await page.waitForSelector(
-      ".flex-h-box > div > .bp3-popover-wrapper > .bp3-popover-target > .bp3-small"
-    );
-    await page.click(
-      ".flex-h-box > div > .bp3-popover-wrapper > .bp3-popover-target > .bp3-small"
-    );
+    await page.waitForXPath("//*[@id=\"app\"]/div/div/div[2]/div[1]/div/div[6]/span/span/span/span/span")
+    
+    const elements = await page.$x(
+      "//*[@id=\"app\"]/div/div/div[2]/div[1]/div/div[6]/span/span/span/span/span"
+    )
+
+    await elements[0].click()
 
     console.log("Opening Export menu");
 
